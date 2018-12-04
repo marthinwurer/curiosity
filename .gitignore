@@ -3,3 +3,4 @@ data/
 saved_nets/
 .python-version
 _vizdoom.ini
+__pycache__/
