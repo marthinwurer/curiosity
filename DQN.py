@@ -1,6 +1,7 @@
 import logging
 import math
 import random
+import time
 from itertools import count
 
 import numpy as np
@@ -163,49 +164,58 @@ class DQNTrainingState(object):
         return loss
 
     # noinspection PyCallingNonCallable
-    def run_episode(self) -> (float, int):
+    def run_episode(self, test=False) -> (float, int):
         # Initialize the environment and state
         screen = self.env.reset()
         screen = to_batch_shape(screen)
         # screen = format_screen(screen, self.device)
         total_loss = 0
-        done = False
-        frame_reward = 0
+        if test:
+            self.env.set_frame_skips(1)
+        else:
+            self.env.set_frame_skips(self.frameskip)
 
         # do each step
         for t in count():
             # Select and perform an action
             sample = random.random()
-            if sample > self.hyper.calc_eps(self.training_steps):
+            if sample > self.hyper.calc_eps(self.training_steps) or test:
                 with torch.no_grad():
                     formatted_screen = image_batch_to_device_and_format(screen, self.device)
-                    action = self.policy_net(formatted_screen).max(1)[1].view(1, 1).cpu()
+                    actions = self.policy_net(formatted_screen)
+                    action = actions.max(1)[1].view(1, 1).cpu()
+                    if test:
+                        print("Action values: %s" % actions.data)
+                        print("Best action: %s" % self.env.get_action_name(action.item()))
             else:
                 action = np.array([[random.randrange(self.num_actions)]])
 
             last_screen = screen
 
-            reward = 0  # The reward for this step
-            for frame in range(self.frameskip):
-                screen, frame_reward, done, misc = self.env.step(action.item())
-                reward += frame_reward
-                if done:
-                    break
+            screen, reward, done, misc = self.env.step(action.item())
+
             reward = np.array([[reward]])
 
             # convert the next state
             screen = to_batch_shape(screen)
 
-            # Store the transition in memory
-            self.memory.push((last_screen, action, screen, reward))
 
-            # Perform one step of the optimization (on the target network)
-            total_loss += self.optimize_model()
-            self.training_steps += 1
+            # if this is not testing the network, store the data and train
+            if not test:
+                # Store the transition in memory
+                self.memory.push((last_screen, action, screen, reward))
+
+                # Perform one step of the optimization (on the target network)
+                total_loss += self.optimize_model()
+                self.training_steps += 1
+            else:
+                # otherwise sleep so we've got a reasonable framerate
+                print(reward)
+                time.sleep(0.02)
 
             if done:
                 # calculate average loss and return it
-                return (total_loss / t, frame_reward)
+                return (total_loss / t, reward)
 
     def train_for_episodes(self, episodes):
         with tqdm(range(episodes), total=episodes, unit="episode") as t:

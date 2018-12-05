@@ -18,6 +18,16 @@ class MyEnv(object):
         """
         raise NotImplementedError
 
+    def get_action_name(self, action):
+        """
+        Return the string value of the name of the action
+        Args:
+            action:
+
+        Returns:
+
+        """
+        raise NotImplementedError
     def reset(self) -> object:
         """
         Reset this environment to the base state, return the starting observation
@@ -40,17 +50,30 @@ class MyEnv(object):
         """
         raise NotImplementedError
 
+    def get_frame_rate(self):
+        """
+        Return the number of frames that occur in a second for the game environment
+        Returns:
+
+        """
+        raise NotImplementedError
+
+    def set_frame_skips(self, frame_skips):
+        raise NotImplementedError
+
 
 class BasicDoomEnv(MyEnv):
     shoot = [0, 0, 1]
     left = [1, 0, 0]
     right = [0, 1, 0]
     actions = [shoot, left, right]
+    action_names = ["Shoot", "Left", "Right"]
 
-    def __init__(self):
+    def __init__(self, frame_skips=1):
         self.game = DoomGame()
         self.game.load_config("../ViZDoom/scenarios/basic.cfg")
         self.game.init()
+        self.frame_skips = frame_skips
 
         self.state = self.game.get_state()
 
@@ -59,10 +82,12 @@ class BasicDoomEnv(MyEnv):
 
     def step(self, action):
         action = BasicDoomEnv.actions[action]
-        reward = self.game.make_action(action)
+        reward = self.game.make_action(action, self.frame_skips)
         done = self.game.is_episode_finished()
         if not done:
             self.state = self.game.get_state()
+        else:
+            reward = self.game.get_total_reward()
         img = self.state.screen_buffer
         misc = self.state.game_variables
 
@@ -79,3 +104,13 @@ class BasicDoomEnv(MyEnv):
 
     def get_num_actions(self):
         return len(self.actions)
+
+    def get_action_name(self, action):
+        return self.action_names[action]
+
+    def get_frame_rate(self):
+        return 35
+
+    def set_frame_skips(self, frame_skips):
+        self.frame_skips = frame_skips
+
