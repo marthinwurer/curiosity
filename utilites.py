@@ -62,7 +62,7 @@ def conv2d_factory(input_shape, out_channels=None, kernel_size=3, stride=1, padd
     return conv, output_shape, num_params
 
 
-class GenericEncoder(nn.Module):
+class GenericConvolutionalEncoder(nn.Module):
     def __init__(self, input_shape, max_final_width=8, activation=F.relu):
         """
 
@@ -71,7 +71,7 @@ class GenericEncoder(nn.Module):
             max_final_width: the maximum desired final width of the network.
             activation: The activation function used by each layer
         """
-        super(GenericEncoder, self).__init__()
+        super(GenericConvolutionalEncoder, self).__init__()
 
         next_shape = input_shape
         self.activation = activation
@@ -89,6 +89,32 @@ class GenericEncoder(nn.Module):
         for layer in self.conv_layers:
             x = self.activation(layer(x))
         return x
+
+
+class GenericFullyConnected(nn.Module):
+    def __init__(self, input_shape, shape, depth, activation=F.relu):
+        """
+
+        Args:
+            input_shape: a 3-element tuple with the number of channels, the height, and the width.
+            max_final_width: the maximum desired final width of the network.
+            activation: The activation function used by each layer
+        """
+        super(GenericFullyConnected, self).__init__()
+
+        self.activation = activation
+
+        self.layers = nn.ModuleList([])
+        for i in range(depth):
+            layer = nn.Linear(input_shape, shape)
+            self.layers.append(layer)
+            input_shape = shape
+
+    def forward(self, x):
+        for layer in self.conv_layers:
+            x = self.activation(layer(x))
+        return x
+
 
 
 def flat_shape(shape):
@@ -111,6 +137,10 @@ def format_screen(screen, device):
     screen = torch.from_numpy(screen)
     # Resize, and add a batch dimension (BCHW)
     return screen.unsqueeze(0).to(device)
+
+
+def to_torch_channels(array: np.ndarray):
+    return np.moveaxis(array, 0, -1)
 
 
 def to_batch_shape(array: np.ndarray):

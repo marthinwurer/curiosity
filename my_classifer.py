@@ -9,14 +9,14 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from trainer import test, train
-from utilites import conv_output_shape, calc_params, flat_shape, GenericEncoder, flatten
+from utilites import conv_output_shape, calc_params, flat_shape, GenericConvolutionalEncoder, flatten
 
 
 class MyClassifierNet(nn.Module):
     def __init__(self, input_shape, num_classes, fc_total=128, activation=F.relu):
         super().__init__()
 
-        self.conv_layers = GenericEncoder(input_shape)
+        self.conv_layers = GenericConvolutionalEncoder(input_shape)
         self.activation = activation
 
         final_shape = flat_shape(self.conv_layers.output_shape)

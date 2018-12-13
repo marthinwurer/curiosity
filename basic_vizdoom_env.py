@@ -1,5 +1,7 @@
+import random
+
 import numpy as np
-from gym import Env, Space
+from gym import Env, Space, spaces
 from vizdoom import *
 
 from myenv import MyEnv
@@ -61,51 +63,107 @@ class BasicDoomEnv(MyEnv):
         self.frame_skips = frame_skips
 
 
-class BasicDoomActionSpace(Space):
+class BasicDoomActionSpace(spaces.Discrete):
     shoot = [0, 0, 1]
     left = [1, 0, 0]
     right = [0, 1, 0]
     actions = [shoot, left, right]
     action_names = ["Shoot", "Left", "Right"]
-
+    action_map = None
 
     def __init__(self):
-        super().__init__(shape=(3,), dtype=None)
-
-    def sample(self):
-        pass
+        super().__init__(len(BasicDoomActionSpace.actions))
 
     def contains(self, x):
-        pass
+        # mostly taken from spaces.discrete
+        if isinstance(x, int):
+            as_int = x
+        elif isinstance(x, (np.generic, np.ndarray)) and (x.dtype.kind in np.typecodes['AllInteger'] and x.shape == ()):
+            as_int = int(x)
+        elif isinstance(x, str):
+            return x in self.action_map
+        else:
+            return False
+
+        return 0 <= as_int < self.n
+
+    @classmethod
+    def init_action_map(cls):
+        # init the action map
+        if cls.action_map is None:
+            cls.action_map = {}
+            for index, name in enumerate(cls.action_names):
+                cls.action_map[index] = cls.actions[index]
+                cls.action_map[name] = cls.actions[index]
+
+
+# Init the basic doom action space
+BasicDoomActionSpace.init_action_map()
 
 
 class BasicDoomObservationSpace(Space):
 
     def __init__(self, shape):
-        super().__init__(shape=shape, dtype=np.dtype.unit8)
+        super().__init__(shape=shape, dtype=np.uint8)
 
     def sample(self):
-        pass
+        return np.array(np.random.random_sample(self.shape) * 255, dtype=self.dtype)
 
     def contains(self, x):
-        pass
+        return x.shape == self.shape and x.dtype == self.dtype
 
 
-class GymDoomEnv(Env):
+class GymBasicDoomEnv(Env):
 
     # Set these in ALL subclasses
     action_space = None
     observation_space = None
 
-    def __init__(self):
+    def __init__(self, frame_skips):
+        self.game = DoomGame()
+        self.game.load_config("../ViZDoom/scenarios/basic.cfg")
+        self.game.init()
+        self.frame_skips = frame_skips
+
+        self.state = self.game.get_state()
+
+        screen_shape = (
+            self.game.get_screen_height(),
+            self.game.get_screen_width(),
+            self.game.get_screen_channels(),
+        )
+
         self.action_space = BasicDoomActionSpace()
+        self.observation_space = BasicDoomObservationSpace(screen_shape)
 
+    def get_screen(self):
+        img = self.state.screen_buffer
+        img = np.moveaxis(img, -1, 0)
+        return img
 
-    def step(self, action):
-        pass
+    def step(self, action: int):
+        action = self.action_space.action_map[action]
+        reward = self.game.make_action(action, self.frame_skips)
+        done = self.game.is_episode_finished()
+        if not done:
+            self.state = self.game.get_state()
+        # else:
+        #     reward = self.game.get_total_reward()
+        img = self.get_screen()
+        misc = self.state.game_variables
+
+        # scale the reward
+        reward = reward / 100
+
+        return (img, reward, done, misc)
 
     def reset(self):
-        pass
+        self.game.new_episode()
+        self.state = self.game.get_state()
+        return self.get_screen()
 
     def render(self, mode='human'):
-        pass
+        if mode == "rgb_array":
+            screen = self.get_screen()
+            return screen
+

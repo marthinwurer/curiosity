@@ -57,6 +57,12 @@ This gets squared for mse loss, but google clipped it to -1, 1 before squaring f
 
 https://github.com/Microsoft/malmo/blob/master/doc/build_linux.md
 
+## Gym moving dot
+
+https://github.com/mrahtz/gym-moving-dot
+
+    pip install --user git+https://github.com/mrahtz/gym-moving-dot
+
 
 
 

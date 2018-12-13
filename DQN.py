@@ -8,12 +8,14 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from collections import namedtuple
+
+from gym import Env, Space, spaces
 from torch import nn
 from torch import optim
 from tqdm import tqdm
 
 from basic_vizdoom_env import MyEnv
-from utilites import format_screen, log_tensors, image_batch_to_device_and_format, to_batch_shape
+from utilites import format_screen, log_tensors, image_batch_to_device_and_format, to_batch_shape, to_torch_channels
 
 logger = logging.getLogger(__name__)
 
@@ -78,18 +80,26 @@ class ReplayMemory(object):
         return len(self.memory)
 
 
+
 class DQNNet(nn.Module):
 
     # noinspection PyUnusedLocal
-    def __init__(self, input_shape, num_actions, **kwargs):
+    def __init__(self, input_space: Space, action_space: Space, **kwargs):
         super().__init__()
+        self.input_shape = input_space.shape
+        self.action_shape = action_space.shape
+
+        if isinstance(input_space, spaces.Discrete):
+            self.input_shape = input_space.n
+        if isinstance(action_space, spaces.Discrete):
+            self.action_shape = action_space.n
 
     def forward(self, *x):
         raise NotImplementedError
 
 
 class DQNTrainingState(object):
-    def __init__(self, model_class: DQNNet, env: MyEnv, device,
+    def __init__(self, model_class: DQNNet, env: Env, device,
                  hyper: DQNHyperparameters, optimizer_type=optim.RMSprop, frameskip=4):
         self.env = env
         self.device = device
@@ -97,13 +107,11 @@ class DQNTrainingState(object):
         self.memory = ReplayMemory(hyper.memory_size)
         self.training_steps = 0
 
-        self.input_shape = env.get_observation_shape()
-        self.num_actions = env.get_num_actions()
         self.frameskip = frameskip
 
         self.model_class = model_class
-        self.policy_net = model_class(self.input_shape, self.num_actions)
-        self.target_net = model_class(self.input_shape, self.num_actions)
+        self.policy_net = model_class(env.observation_space, env.action_space)
+        self.target_net = model_class(env.observation_space, env.action_space)
         self.policy_net.to(device)
         self.target_net.to(device)
         self.optimizer = optimizer_type(self.policy_net.parameters())
@@ -167,13 +175,15 @@ class DQNTrainingState(object):
     def run_episode(self, test=False) -> (float, int):
         # Initialize the environment and state
         screen = self.env.reset()
+        screen = to_torch_channels(screen)
         screen = to_batch_shape(screen)
         # screen = format_screen(screen, self.device)
         total_loss = 0
-        if test:
-            self.env.set_frame_skips(1)
-        else:
-            self.env.set_frame_skips(self.frameskip)
+        total_reward = 0
+        # if test:
+        #     self.env.set_frame_skips(1)
+        # else:
+        #     self.env.set_frame_skips(self.frameskip)
 
         # do each step
         for t in count():
@@ -186,19 +196,22 @@ class DQNTrainingState(object):
                     action = actions.max(1)[1].view(1, 1).cpu()
                     if test:
                         print("Action values: %s" % actions.data)
-                        print("Best action: %s" % self.env.get_action_name(action.item()))
+                        print("Best action: %s" % (action.item()))
             else:
-                action = np.array([[random.randrange(self.num_actions)]])
+                action = self.env.action_space.sample()
+                action = np.array([[action]])
 
             last_screen = screen
 
             screen, reward, done, misc = self.env.step(action.item())
+            self.env.render("human")
+            total_reward += reward
 
             reward = np.array([[reward]])
 
             # convert the next state
+            screen = to_torch_channels(screen)
             screen = to_batch_shape(screen)
-
 
             # if this is not testing the network, store the data and train
             if not test:
@@ -215,13 +228,13 @@ class DQNTrainingState(object):
 
             if done:
                 # calculate average loss and return it
-                return (total_loss / t, reward)
+                return (total_loss / t, total_reward)
 
     def train_for_episodes(self, episodes):
         with tqdm(range(episodes), total=episodes, unit="episode") as t:
             for episode in t:
-                episode_loss, reward = self.run_episode()
-                string = 'loss: %.3f, %.3f' % (episode_loss, reward)
+                episode_loss, total_reward = self.run_episode()
+                string = 'loss: %.3f, %.3f' % (episode_loss, total_reward)
                 t.set_postfix_str(string)
                 # Update the target network
                 if episode % self.hyper.TARGET_UPDATE == 0:
