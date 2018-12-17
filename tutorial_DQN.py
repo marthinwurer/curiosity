@@ -421,7 +421,7 @@ def optimize_model():
 # the notebook and run lot more epsiodes.
 #
 
-num_episodes = 50
+num_episodes = 5000
 for i_episode in range(num_episodes):
     # Initialize the environment and state
     env.reset()

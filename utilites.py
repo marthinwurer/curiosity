@@ -111,7 +111,7 @@ class GenericFullyConnected(nn.Module):
             input_shape = shape
 
     def forward(self, x):
-        for layer in self.conv_layers:
+        for layer in self.layers:
             x = self.activation(layer(x))
         return x
 
@@ -140,7 +140,10 @@ def format_screen(screen, device):
 
 
 def to_torch_channels(array: np.ndarray):
-    return np.moveaxis(array, 0, -1)
+    if array is not None and len(array.shape) > 2:
+        return np.moveaxis(array, 0, -1)
+    else:
+        return array
 
 
 def to_batch_shape(array: np.ndarray):

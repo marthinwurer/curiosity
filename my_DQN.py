@@ -36,7 +36,9 @@ class FCDQN(DQNNet):
     def __init__(self, input_shape, num_actions, fc_total=128, activation=F.relu):
         super().__init__(input_shape, num_actions)
 
-        self.layers = GenericFullyConnected(self.input_shape, fc_total, 3, activation=activation)
+        in_len = self.input_shape[0]
+
+        self.layers = GenericFullyConnected(in_len, fc_total, 3, activation=activation)
         self.activation = activation
 
         self.to_actions = nn.Linear(fc_total, self.action_shape)

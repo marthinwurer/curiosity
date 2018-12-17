@@ -80,7 +80,6 @@ class ReplayMemory(object):
         return len(self.memory)
 
 
-
 class DQNNet(nn.Module):
 
     # noinspection PyUnusedLocal
@@ -90,7 +89,7 @@ class DQNNet(nn.Module):
         self.action_shape = action_space.shape
 
         if isinstance(input_space, spaces.Discrete):
-            self.input_shape = input_space.n
+            self.input_shape = (input_space.n,)
         if isinstance(action_space, spaces.Discrete):
             self.action_shape = action_space.n
 
@@ -100,12 +99,13 @@ class DQNNet(nn.Module):
 
 class DQNTrainingState(object):
     def __init__(self, model_class: DQNNet, env: Env, device,
-                 hyper: DQNHyperparameters, optimizer_type=optim.RMSprop, frameskip=4):
+                 hyper: DQNHyperparameters, optimizer_type=optim.RMSprop, frameskip=4, verbose=False):
         self.env = env
         self.device = device
         self.hyper = hyper
         self.memory = ReplayMemory(hyper.memory_size)
         self.training_steps = 0
+        self.verbose = verbose
 
         self.frameskip = frameskip
 
@@ -135,9 +135,11 @@ class DQNTrainingState(object):
         # Compute a mask of non-final states and concatenate the batch elements
         non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
                                                 batch.next_state)), device=self.device, dtype=torch.uint8)
-        non_final_next_states = np.concatenate([s for s in batch.next_state
-                                           if s is not None])
-        non_final_next_states = image_batch_to_device_and_format(non_final_next_states, self.device)
+        try:
+            non_final_next_states = np.concatenate([s for s in batch.next_state if s is not None])
+            non_final_next_states = image_batch_to_device_and_format(non_final_next_states, self.device)
+        except:
+            non_final_next_states = None
 
         # concatenate all the training data and convert to torch
         state_batch = np.concatenate(batch.state)
@@ -155,16 +157,31 @@ class DQNTrainingState(object):
         # Compute V(s_{t+1}) for all next states.
         # get the values of the next states
         next_state_values = torch.zeros(self.hyper.BATCH_SIZE, device=self.device)
-        next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0].detach()
+        if non_final_next_states is not None:
+            with torch.no_grad():
+                next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0].detach()
+
+        # zero the gradient
+        self.optimizer.zero_grad()
+
+        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+        # columns of actions taken
+        # use the gather operation to get a tensor of the actions taken. backprop will go through the gather.
+        state_values = self.policy_net(state_batch)
+        state_action_values = state_values.gather(1, action_batch)
+
         # Compute the expected Q values
-        expected_state_action_values = (next_state_values * self.hyper.GAMMA) + reward_batch
+        adjusted_next_values = next_state_values * self.hyper.GAMMA
+        expected_state_action_values = adjusted_next_values + reward_batch
 
         # Compute Huber loss
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        # loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        loss = expected_state_action_values - state_action_values
+        loss = loss.data.unsqueeze(1)
 
         # Optimize the model
-        self.optimizer.zero_grad()
-        loss.backward()
+        # loss.backward()
+        state_action_values.backward(loss)
         for param in self.policy_net.parameters():
             param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
@@ -186,20 +203,26 @@ class DQNTrainingState(object):
         #     self.env.set_frame_skips(self.frameskip)
 
         # do each step
-        for t in count():
+        for t in count(1):
             # Select and perform an action
             sample = random.random()
-            if sample > self.hyper.calc_eps(self.training_steps) or test:
+            eps = self.hyper.calc_eps(self.training_steps)
+            if sample > eps or test:
                 with torch.no_grad():
                     formatted_screen = image_batch_to_device_and_format(screen, self.device)
                     actions = self.policy_net(formatted_screen)
                     action = actions.max(1)[1].view(1, 1).cpu()
-                    if test:
+                    if test or self.verbose:
+                        print("space: %s" % screen)
                         print("Action values: %s" % actions.data)
                         print("Best action: %s" % (action.item()))
             else:
                 action = self.env.action_space.sample()
                 action = np.array([[action]])
+                if self.verbose:
+                    print("Action: %s" % action)
+                    print("sample: %s" % sample)
+                    print("eps: %s" % eps)
 
             last_screen = screen
 
@@ -209,9 +232,10 @@ class DQNTrainingState(object):
 
             reward = np.array([[reward]])
 
-            # convert the next state
-            screen = to_torch_channels(screen)
-            screen = to_batch_shape(screen)
+            # convert the next state if it exists
+            if screen is not None:
+                screen = to_torch_channels(screen)
+                screen = to_batch_shape(screen)
 
             # if this is not testing the network, store the data and train
             if not test:
@@ -240,7 +264,7 @@ class DQNTrainingState(object):
                 if episode % self.hyper.TARGET_UPDATE == 0:
                     logger.debug("Updating target weights")
                     self.update_target()
-                    log_tensors(logger)
+                    # log_tensors(logger)
 
     def save_model(self, path):
         logger.info("Saving Model to %s" % path)
