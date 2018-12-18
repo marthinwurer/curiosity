@@ -8,6 +8,7 @@ import unittest
 from DQN import DQNTrainingState, DQNHyperparameters
 from basic_vizdoom_env import GymBasicDoomEnv
 from my_DQN import MaitlandDQN, FCDQN
+from xor_env import BasicXOREnv
 
 logger = logging.getLogger(__name__)
 device = torch.device("cpu")
@@ -32,29 +33,31 @@ class TestDQN(unittest.TestCase):
     #     state.train_for_episodes(1)
     #     # self.assertEqual(True, False)
 
-    def test_basic_doom_env(self):
-        hyper = DQNHyperparameters(batch_size=128)
-        env = GymBasicDoomEnv(4)
-        env.render("rgb_array")
+    def env_tests(self, hyper, env, net=MaitlandDQN):
+        env.render("human")
         env.reset()
         logger.info("Action shape: %s" % (env.action_space.shape,))
         logger.info("Observation Shape: %s" % (env.observation_space.shape,))
 
-        state = DQNTrainingState(MaitlandDQN, env, device, hyper)
+        state = DQNTrainingState(net, env, device, hyper)
         state.train_for_episodes(1)
-        # self.assertEqual(True, False)
+        state.run_episode(True)
+
+    def test_basic_doom_env(self):
+        hyper = DQNHyperparameters(batch_size=128)
+        env = GymBasicDoomEnv(4)
+        self.env_tests(hyper, env)
 
     def test_moving_dot(self):
         hyper = DQNHyperparameters(batch_size=128)
         env = gym.make("MovingDot-v0")
-        env.render("human")
-        env.reset()
-        env.max_steps = 200
-        logger.info("Action shape: %s" % (env.action_space.shape,))
-        logger.info("Observation Shape: %s" % (env.observation_space.shape,))
+        env.max_steps = 100
+        self.env_tests(hyper, env)
 
-        state = DQNTrainingState(MaitlandDQN, env, device, hyper)
-        state.train_for_episodes(1)
+    def test_xor_env(self):
+        hyper = DQNHyperparameters(batch_size=128)
+        env = BasicXOREnv()
+        self.env_tests(hyper, env, net=FCDQN)
 
 
 if __name__ == '__main__':
