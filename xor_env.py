@@ -1,12 +1,9 @@
 import logging
 import random
-import torch
 from collections import namedtuple
 
 import numpy as np
 from gym import Env, Space, spaces
-from DQN import DQNTrainingState, DQNHyperparameters
-from my_DQN import MaitlandDQN, FCDQN
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +19,12 @@ xor_state = namedtuple("State", ["state", "reward"])
 class BasicXORStateSpace(Space):
     def __init__(self):
         super().__init__((2,), np.uint8)
-        self.spaces = []
-        for a in range(2):
-            for b in range(2):
-                array = np.zeros([2], dtype=self.dtype)
-                array[0] = a
-                array[1] = b
-                reward = a ^ b
-                state = xor_state(array, reward)
-                self.spaces.append(state)
+        self.spaces = [
+            xor_state(np.array([0, 0]), [1, 0]),
+            xor_state(np.array([0, 1]), [0, 1]),
+            xor_state(np.array([1, 0]), [0, 1]),
+            xor_state(np.array([1, 1]), [1, 0]),
+        ]
 
     def sample(self):
         return random.sample(self.spaces, 1)[0]
@@ -50,7 +44,7 @@ class BasicXOREnv(Env):
     def __init__(self):
         self.current_state = BasicXOREnv.observation_space.sample()
 
-    def step(self, action):
+    def step(self, action: int):
         """
         Do a single timestep of the environment with the given action
         Args:
@@ -62,7 +56,10 @@ class BasicXOREnv(Env):
             done (boolean): whether the episode has ended, in which case further step() calls will return undefined results
             info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes learning)
         """
-        return None, (self.current_state.reward == action) * 1.0, True, self.current_state
+        # get the reward
+        rewards = self.current_state.reward
+        reward = rewards[action]
+        return None, reward, True, self.current_state
 
     def reset(self):
         self.current_state = BasicXOREnv.observation_space.sample()
@@ -70,28 +67,5 @@ class BasicXOREnv(Env):
 
     def render(self, mode='human'):
         return self.current_state.state
-
-
-
-if __name__ == "__main__":
-    FORMAT = '%(asctime)-15s | %(filename)s:%(lineno)s | %(message)s'
-    logging.basicConfig(format=FORMAT, level=logging.DEBUG)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    hyper = DQNHyperparameters(batch_size=128)
-    env = BasicXOREnv()
-    env.render("human")
-    env.reset()
-    env.max_steps = 200
-    logger.info("Action shape: %s" % (env.action_space.shape,))
-    logger.info("Observation Shape: %s" % (env.observation_space.shape,))
-    logger.info("Observation space: %s" % env.observation_space.spaces)
-    actions = [env.action_space.sample() for _ in range(10)]
-    logger.info("Action space: %s" % actions)
-
-    state = DQNTrainingState(FCDQN, env, device, hyper, verbose=True)
-
-    state.train_for_episodes(50000)
-
-    state.save_model("saved_nets/xor_env.mod")
 
 

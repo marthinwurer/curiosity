@@ -3,6 +3,7 @@ import math
 import random
 import time
 from itertools import count
+from typing import Type
 
 import numpy as np
 import torch
@@ -98,7 +99,7 @@ class DQNNet(nn.Module):
 
 
 class DQNTrainingState(object):
-    def __init__(self, model_class: DQNNet, env: Env, device,
+    def __init__(self, model_class: Type[DQNNet], env: Env, device,
                  hyper: DQNHyperparameters, optimizer_type=optim.RMSprop, frameskip=4, verbose=False):
         self.env = env
         self.device = device
