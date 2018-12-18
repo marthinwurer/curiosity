@@ -22,7 +22,7 @@ def setUpModule():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     global batch_size
-    batch_size = 8
+    batch_size = 128
 
 
 class TestXOREnv(unittest.TestCase):
@@ -40,7 +40,7 @@ class TestXOREnv(unittest.TestCase):
 
         state = DQNTrainingState(FCDQN, env, device, hyper, verbose=True)
 
-        state.train_for_episodes(200)
+        state.train_for_episodes(20000)
 
         state.save_model("saved_nets/xor_env.mod")
 

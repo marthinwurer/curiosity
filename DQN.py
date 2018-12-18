@@ -145,7 +145,8 @@ class DQNTrainingState(object):
         state_batch = np.concatenate(batch.state)
         state_batch = image_batch_to_device_and_format(state_batch, self.device)
         action_batch = torch.from_numpy(np.concatenate(batch.action))
-        reward_batch = torch.from_numpy(np.concatenate(batch.reward))
+        reward_batch_np = np.concatenate(batch.reward, axis=None)
+        reward_batch = torch.from_numpy(reward_batch_np)
         action_batch = action_batch.to(self.device, torch.long)
         reward_batch = reward_batch.to(self.device, self.hyper.data_type)
 
@@ -176,8 +177,8 @@ class DQNTrainingState(object):
 
         # Compute Huber loss
         # loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
-        loss = expected_state_action_values - state_action_values
-        loss = loss.data.unsqueeze(1)
+        loss = state_action_values - expected_state_action_values
+        # loss = loss.data.unsqueeze(1)
 
         # Optimize the model
         # loss.backward()
@@ -186,7 +187,7 @@ class DQNTrainingState(object):
             param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
 
-        return loss
+        return loss.mean().detach()
 
     # noinspection PyCallingNonCallable
     def run_episode(self, test=False) -> (float, int):
