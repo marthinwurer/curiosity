@@ -198,19 +198,21 @@ class DQNTrainingState(object):
         state_values = self.policy_net(batch_data.state_batch)
         state_action_values = state_values.gather(1, batch_data.action_batch)
 
+        esav = expected_state_action_values.view(self.hyper.BATCH_SIZE, 1)
+
         # Compute Huber loss
         # loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
-        loss = state_action_values - expected_state_action_values
+        loss = state_action_values - esav
         # loss = loss.data.unsqueeze(1)
 
         # Optimize the model
         # loss.backward()
         state_action_values.backward(loss)
-        for param in self.policy_net.parameters():
-            param.grad.data.clamp_(-1, 1)
+        # for param in self.policy_net.parameters():
+        #     param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
 
-        return loss.mean().detach()
+        return loss.abs().mean().detach()
 
     # noinspection PyCallingNonCallable
     def _take_action(self, action):
@@ -282,7 +284,7 @@ class DQNTrainingState(object):
         with tqdm(range(episodes), total=episodes, unit="episode") as t:
             for episode in t:
                 episode_loss, total_reward = self.run_episode()
-                string = 'loss: %.3f, %.3f' % (episode_loss, total_reward)
+                string = 'loss: %f, %f' % (episode_loss, total_reward)
                 t.set_postfix_str(string)
                 # Update the target network
                 if episode % self.hyper.TARGET_UPDATE == 0:

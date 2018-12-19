@@ -25,6 +25,8 @@ class MaitlandDQN(DQNNet):
         self.to_actions = nn.Linear(fc_total, self.action_shape)
 
     def forward(self, x: Tensor):
+        # make sure that the input shape is correct
+        assert x.shape[1:] == self.input_shape
         # convert the input image to the correct format
         x = x.to(torch.float32) / 255
 
@@ -47,6 +49,8 @@ class FCDQN(DQNNet):
         self.to_actions = nn.Linear(fc_total, self.action_shape)
 
     def forward(self, x: Tensor):
+        # make sure that the input shape is correct
+        assert x.shape[1:] == self.input_shape
         x = x.to(torch.float32)
         x = self.layers(x)
         x = self.to_actions(x)
