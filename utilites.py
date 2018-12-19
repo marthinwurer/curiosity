@@ -116,7 +116,6 @@ class GenericFullyConnected(nn.Module):
         return x
 
 
-
 def flat_shape(shape):
     return np.prod(shape)
 
@@ -156,13 +155,14 @@ def image_batch_to_device_and_format(screen_batch, device, dtype=torch.float32):
     Args:
         screen_batch:
         device:
+        dtype:
 
     Returns:
 
     """
     # Convert to float, rescale, convert to torch tensor
     # transfer it as a uint8 to save bandwidth
-    screen = torch.from_numpy(screen_batch).to(device, torch.float) / 255
+    screen = torch.from_numpy(screen_batch).to(device, dtype=dtype) / 255
     return screen.to(device)
 
 

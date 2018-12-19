@@ -2,7 +2,7 @@ import logging
 
 import torch
 import torch.nn.functional as F
-from torch import nn
+from torch import nn, Tensor
 
 from DQN import DQNNet, DQNHyperparameters, DQNTrainingState
 from basic_vizdoom_env import BasicDoomEnv
@@ -24,7 +24,10 @@ class MaitlandDQN(DQNNet):
         self.fc = nn.Linear(final_shape, fc_total)
         self.to_actions = nn.Linear(fc_total, self.action_shape)
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
+        # convert the input image to the correct format
+        x = x.to(torch.float32) / 255
+
         x = self.conv_layers(x)
         x = self.activation(self.fc(flatten(x)))
         x = self.to_actions(x)
@@ -43,7 +46,8 @@ class FCDQN(DQNNet):
 
         self.to_actions = nn.Linear(fc_total, self.action_shape)
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
+        x = x.to(torch.float32)
         x = self.layers(x)
         x = self.to_actions(x)
         return x

@@ -20,6 +20,7 @@ def setUpModule():
     global device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class TestDQN(unittest.TestCase):
     # def test_openai_gym(self):
     #     hyper = DQNHyperparameters(batch_size=128)
@@ -32,15 +33,18 @@ class TestDQN(unittest.TestCase):
     #     state = DQNTrainingState(FCDQN, env, device, hyper)
     #     state.train_for_episodes(1)
     #     # self.assertEqual(True, False)
-
-    def env_tests(self, hyper, env, net=MaitlandDQN):
+    def env_state(self, hyper, env, net=MaitlandDQN):
         env.render("human")
         env.reset()
         logger.info("Action shape: %s" % (env.action_space.shape,))
         logger.info("Observation Shape: %s" % (env.observation_space.shape,))
 
         state = DQNTrainingState(net, env, device, hyper)
-        state.train_for_episodes(1)
+        return state
+
+    def env_tests(self, hyper, env, net=MaitlandDQN, tests=5):
+        state = self.env_state(hyper, env, net)
+        state.train_for_episodes(tests)
         state.run_episode(True)
 
     def test_basic_doom_env(self):
@@ -57,7 +61,13 @@ class TestDQN(unittest.TestCase):
     def test_xor_env(self):
         hyper = DQNHyperparameters(batch_size=128)
         env = BasicXOREnv()
-        self.env_tests(hyper, env, net=FCDQN)
+        self.env_tests(hyper, env, net=FCDQN, tests=500)
+
+    def test_replay_memory_xor(self):
+        hyper = DQNHyperparameters(batch_size=128)
+        env = BasicXOREnv()
+        state = self.env_state(hyper, env, net=FCDQN)
+
 
 
 if __name__ == '__main__':
