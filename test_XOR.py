@@ -22,7 +22,7 @@ def setUpModule():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     global batch_size
-    batch_size = 128
+    batch_size = 8
 
 
 class TestXOREnv(unittest.TestCase):

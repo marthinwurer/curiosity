@@ -94,7 +94,7 @@ class ReplayMemory(object):
     def sample(self, batch_size):
         return random.sample(self.memory, batch_size)
 
-    # noinspection PyCallingNonCallable
+    # noinspection PyCallingNonCallable,PyUnresolvedReferences
     def get_batch(self, batch_size):
         # get a batch worth of experiences and transpose them into into lists for a batch
         transitions = self.sample(batch_size)
@@ -147,7 +147,7 @@ class DQNNet(nn.Module):
 
 class DQNTrainingState(object):
     def __init__(self, model_class: Type[DQNNet], env: Env, device,
-                 hyper: DQNHyperparameters, optimizer_type=optim.RMSprop, frameskip=4, verbose=False):
+                 hyper: DQNHyperparameters, optimizer_type=optim.SGD, frameskip=4, verbose=False):
         self.env = env
         self.device = device
         self.hyper = hyper
@@ -162,7 +162,7 @@ class DQNTrainingState(object):
         self.target_net = model_class(env.observation_space, env.action_space)
         self.policy_net.to(device)
         self.target_net.to(device)
-        self.optimizer = optimizer_type(self.policy_net.parameters())
+        self.optimizer = optimizer_type(self.policy_net.parameters(), lr=0.001)
 
     def update_target(self):
         self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -210,9 +210,15 @@ class DQNTrainingState(object):
         state_action_values.backward(loss)
         # for param in self.policy_net.parameters():
         #     param.grad.data.clamp_(-1, 1)
+        params = self.policy_net.layers.layers[0].parameters()
+        weights = list(params)
+        grads = weights[0].grad
         self.optimizer.step()
 
-        return loss.abs().mean().detach()
+        abs_loss = loss.abs()
+        mean_loss = abs_loss.mean().detach()
+
+        return mean_loss
 
     # noinspection PyCallingNonCallable
     def _take_action(self, action):
@@ -227,7 +233,8 @@ class DQNTrainingState(object):
 
     def _take_net_action(self, state):
         with torch.no_grad():
-            formatted_screen = image_batch_to_device_and_format(state, self.device)
+            # formatted_screen = image_batch_to_device_and_format(state, self.device)
+            formatted_screen = torch.from_numpy(state).to(self.device)
             actions = self.policy_net(formatted_screen)
             action = actions.max(1)[1].view(1, 1).cpu()
         return self._take_action(action)
@@ -250,7 +257,7 @@ class DQNTrainingState(object):
             sample = random.random()
             eps = self.hyper.calc_eps(self.training_steps)
             if sample > eps or test:
-                screen, reward, done, misc, action = self._take_random_action()
+                screen, reward, done, misc, action = self._take_net_action(last_screen)
             else:
                 screen, reward, done, misc, action = self._take_random_action()
             self.env.render("human")
