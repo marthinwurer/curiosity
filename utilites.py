@@ -67,7 +67,7 @@ class GenericConvolutionalEncoder(nn.Module):
         """
 
         Args:
-            input_shape: a 3-element tuple with the number of channels, the height, and the width.
+            input_shape: a 3-element tuple with the number of channels, the height, and the width. (channels first)
             max_final_width: the maximum desired final width of the network.
             activation: The activation function used by each layer
         """
@@ -136,6 +136,18 @@ def format_screen(screen, device):
     screen = torch.from_numpy(screen)
     # Resize, and add a batch dimension (BCHW)
     return screen.unsqueeze(0).to(device)
+
+
+def detect_channel_index(input_shape):
+    dimensions = len(input_shape)
+    if dimensions == 4:
+        # batch shape or video, we're doomed
+        raise NotImplementedError
+    elif dimensions == 3:
+        # we can actually do this shape
+        # find index of min size
+        index = np.argmin(input_shape)
+        return index
 
 
 def to_torch_channels(array: np.ndarray):

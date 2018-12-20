@@ -13,8 +13,10 @@ logger = logging.getLogger(__name__)
 
 class MaitlandDQN(DQNNet):
 
-    def __init__(self, input_shape, num_actions, fc_total=128, activation=F.relu):
-        super().__init__(input_shape, num_actions)
+    def __init__(self, input_space, action_space, fc_total=128, activation=F.relu):
+        super().__init__(input_space, action_space)
+        logger.debug("Input shape type: %s" % type(self.input_shape))
+        logger.debug("New MaitlandDQN with Input Shape: %s" % (self.input_shape,))
 
         self.conv_layers = GenericConvolutionalEncoder(self.input_shape)
         self.activation = activation
@@ -25,8 +27,19 @@ class MaitlandDQN(DQNNet):
         self.to_actions = nn.Linear(fc_total, self.action_shape)
 
     def forward(self, x: Tensor):
+        """
+        Expects (N,Cin,H,W)
+        N is batch size
+        Args:
+            x:
+
+        Returns:
+
+        """
         # make sure that the input shape is correct
-        assert x.shape[1:] == self.input_shape
+        in_shape = x.shape[1:]
+        if in_shape != self.input_shape:
+            raise AssertionError("%s != %s" % (in_shape, self.input_shape))
         # convert the input image to the correct format
         x = x.to(torch.float32) / 255
 

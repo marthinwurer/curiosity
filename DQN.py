@@ -133,13 +133,31 @@ class DQNNet(nn.Module):
 
     def __init__(self, input_space: Space, action_space: Space, **kwargs):
         super().__init__()
-        self.input_shape = input_space.shape
-        self.action_shape = action_space.shape
+        in_space_shape = input_space.shape
 
         if isinstance(input_space, spaces.Discrete):
-            self.input_shape = (input_space.n,)
+            in_space_shape = (input_space.n,)
+        else:
+            in_space_shape = input_space.shape
+
         if isinstance(action_space, spaces.Discrete):
-            self.action_shape = action_space.n
+            action_space_shape = action_space.n
+        else:
+            action_space_shape = action_space.shape
+
+        self.swap_channel = False
+        # check for input shape channel order
+        if len(in_space_shape) == 3:
+            channel_index = np.argmin(in_space_shape).item()
+            logger.debug("Shape: %s Channel index: %s" % (in_space_shape, channel_index))
+            if channel_index != 0:
+                # move that index to the first
+                a = (in_space_shape[channel_index], *in_space_shape[:channel_index], *in_space_shape[channel_index+1:])
+                in_space_shape = a
+                self.swap_channel = True
+
+        self.input_shape = in_space_shape
+        self.action_shape = action_space_shape
 
     def forward(self, *x):
         raise NotImplementedError
