@@ -306,10 +306,6 @@ class DQNTrainingState(object):
                 # Perform one step of the optimization (on the target network)
                 total_loss += self.optimize_model()
                 self.training_steps += 1
-            else:
-                # otherwise sleep so we've got a reasonable framerate
-                print(reward)
-                time.sleep(0.02)
 
             if done:
                 # calculate average loss and return it

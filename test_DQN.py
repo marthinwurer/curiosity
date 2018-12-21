@@ -69,6 +69,5 @@ class TestDQN(unittest.TestCase):
         state = self.env_state(hyper, env, net=FCDQN)
 
 
-
 if __name__ == '__main__':
     unittest.main()
