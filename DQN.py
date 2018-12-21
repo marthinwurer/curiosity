@@ -69,7 +69,7 @@ class BatchData(object):
         self.reward_batch = reward_batch
 
     def send_to(self, device):
-        if self.non_final_next_states:
+        if self.non_final_next_states is not None:
             self.non_final_next_states = self.non_final_next_states.to(device)
         self.non_final_mask = self.non_final_mask.to(device)
         self.state_batch = self.state_batch.to(device)
@@ -129,35 +129,37 @@ class ReplayMemory(object):
         return len(self.memory)
 
 
-class DQNNet(nn.Module):
+def calc_channel_swap(input_space: Space):
 
-    def __init__(self, input_space: Space, action_space: Space, **kwargs):
-        super().__init__()
+    if isinstance(input_space, spaces.Discrete):
+        in_space_shape = (input_space.n,)
+    else:
         in_space_shape = input_space.shape
 
-        if isinstance(input_space, spaces.Discrete):
-            in_space_shape = (input_space.n,)
-        else:
-            in_space_shape = input_space.shape
+    def swap_function(x):
+        return to_batch_shape(x)
+    # check for input shape channel order
+    if len(in_space_shape) == 3:
+        channel_index = np.argmin(in_space_shape).item()
+        logger.debug("Shape: %s Channel index: %s" % (in_space_shape, channel_index))
+        if channel_index != 0:
+            # move that index to the first
+            a = (in_space_shape[channel_index], *in_space_shape[:channel_index], *in_space_shape[channel_index+1:])
+            in_space_shape = a
 
-        if isinstance(action_space, spaces.Discrete):
-            action_space_shape = action_space.n
-        else:
-            action_space_shape = action_space.shape
+            def swap_function(x):
+                return to_batch_shape(np.moveaxis(x, channel_index, 0))
 
-        self.swap_channel = False
-        # check for input shape channel order
-        if len(in_space_shape) == 3:
-            channel_index = np.argmin(in_space_shape).item()
-            logger.debug("Shape: %s Channel index: %s" % (in_space_shape, channel_index))
-            if channel_index != 0:
-                # move that index to the first
-                a = (in_space_shape[channel_index], *in_space_shape[:channel_index], *in_space_shape[channel_index+1:])
-                in_space_shape = a
-                self.swap_channel = True
+    return in_space_shape, swap_function
 
-        self.input_shape = in_space_shape
-        self.action_shape = action_space_shape
+
+class DQNNet(nn.Module):
+
+    def __init__(self, input_shape, action_shape, **kwargs):
+        super().__init__()
+
+        self.input_shape = input_shape
+        self.action_shape = action_shape
 
     def forward(self, *x):
         raise NotImplementedError
@@ -173,11 +175,21 @@ class DQNTrainingState(object):
         self.training_steps = 0
         self.verbose = verbose
 
+        input_shape, swap_function = calc_channel_swap(env.observation_space)
+        action_space = env.action_space
+        self.swap_function = swap_function
+        if isinstance(action_space, spaces.Discrete):
+            action_shape = (action_space.n,)
+        else:
+            action_shape = action_space.shape
+
+        num_actions = np.prod(action_shape)
+
         self.frameskip = frameskip
 
         self.model_class = model_class
-        self.policy_net = model_class(env.observation_space, env.action_space)
-        self.target_net = model_class(env.observation_space, env.action_space)
+        self.policy_net = model_class(input_shape, num_actions)
+        self.target_net = model_class(input_shape, num_actions)
         self.policy_net.to(device)
         self.target_net.to(device)
         self.optimizer = optimizer_type(self.policy_net.parameters(), lr=0.001)
@@ -228,9 +240,6 @@ class DQNTrainingState(object):
         state_action_values.backward(loss)
         # for param in self.policy_net.parameters():
         #     param.grad.data.clamp_(-1, 1)
-        params = self.policy_net.layers.layers[0].parameters()
-        weights = list(params)
-        grads = weights[0].grad
         self.optimizer.step()
 
         abs_loss = loss.abs()
@@ -238,11 +247,19 @@ class DQNTrainingState(object):
 
         return mean_loss
 
+    def _reset_env(self):
+        observation = self.env.reset()
+        if observation is not None:
+            observation = self.swap_function(observation)
+        return observation
+
     # noinspection PyCallingNonCallable
     def _take_action(self, action):
-        screen, reward, done, misc = self.env.step(action.item())
+        observation, reward, done, misc = self.env.step(action.item())
+        if observation is not None:
+            observation = self.swap_function(observation)
         reward = torch.tensor([[reward]], dtype=self.hyper.data_type)
-        return (screen, reward, done, misc, action)
+        return (observation, reward, done, misc, action)
 
     def _take_random_action(self):
         action = self.env.action_space.sample()
@@ -260,38 +277,31 @@ class DQNTrainingState(object):
     # noinspection PyCallingNonCallable
     def run_episode(self, test=False) -> (float, int):
         # Initialize the environment and state
-        screen = self.env.reset()
-        screen = to_torch_channels(screen)
-        screen = to_batch_shape(screen)
+        observation = self._reset_env()
 
         total_loss = 0
         total_reward = 0
 
         # do each step
         for t in count(1):
-            last_screen = screen
+            last_observation = observation
 
             # Select and perform an action
             sample = random.random()
             eps = self.hyper.calc_eps(self.training_steps)
             if sample > eps or test:
-                screen, reward, done, misc, action = self._take_net_action(last_screen)
+                observation, reward, done, misc, action = self._take_net_action(last_observation)
             else:
-                screen, reward, done, misc, action = self._take_random_action()
+                observation, reward, done, misc, action = self._take_random_action()
             self.env.render("human")
             total_reward += reward
 
             reward = torch.tensor([[reward]], dtype=self.hyper.data_type)
 
-            # convert the next state if it exists
-            if screen is not None:
-                screen = to_torch_channels(screen)
-                screen = to_batch_shape(screen)
-
             # if this is not testing the network, store the data and train
             if not test:
                 # Store the transition in memory
-                self.memory.push((last_screen, action, screen, reward))
+                self.memory.push((last_observation, action, observation, reward))
 
                 # Perform one step of the optimization (on the target network)
                 total_loss += self.optimize_model()
