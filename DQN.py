@@ -167,7 +167,7 @@ class DQNNet(nn.Module):
 
 class DQNTrainingState(object):
     def __init__(self, model_class: Type[DQNNet], env: Env, device,
-                 hyper: DQNHyperparameters, optimizer_type=optim.SGD, frameskip=4, verbose=False):
+                 hyper: DQNHyperparameters, optimizer_type=optim.RMSprop, frameskip=4, verbose=False):
         self.env = env
         self.device = device
         self.hyper = hyper
@@ -245,6 +245,9 @@ class DQNTrainingState(object):
         abs_loss = loss.abs()
         mean_loss = abs_loss.mean().detach()
 
+        if math.isnan(mean_loss):
+            logger.error("Loss is NaN, something terrible happened")
+
         return mean_loss
 
     def _reset_env(self):
@@ -268,7 +271,6 @@ class DQNTrainingState(object):
 
     def _take_net_action(self, state):
         with torch.no_grad():
-            # formatted_screen = image_batch_to_device_and_format(state, self.device)
             formatted_screen = torch.from_numpy(state).to(self.device)
             actions = self.policy_net(formatted_screen)
             action = actions.max(1)[1].view(1, 1).cpu()

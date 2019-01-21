@@ -12,7 +12,6 @@ from tqdm import tqdm
 
 from DQN import DQNTrainingState, DQNHyperparameters
 from my_DQN import MaitlandDQN
-from xor_env import BasicXOREnv
 
 logger = logging.getLogger(__name__)
 device = torch.device("cpu")
@@ -25,7 +24,7 @@ def setUpModule():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     global batch_size
-    batch_size = 8
+    batch_size = 128
 
 
 class TestMovingDot(unittest.TestCase):
@@ -45,20 +44,11 @@ class TestMovingDot(unittest.TestCase):
         actions = [env.action_space.sample() for _ in range(10)]
         logger.info("Action space: %s" % actions)
 
-        state = DQNTrainingState(MaitlandDQN, env, device, hyper, verbose=True)
+        state = DQNTrainingState(MaitlandDQN, env, device, hyper, optimizer_type=torch.optim.RMSprop, verbose=True)
+        print(state.policy_net)
         return state
 
-    def test_train_xor_env(self):
-        state = self.setup_state()
-
-        state.train_for_episodes(200)
-
-        state.save_model("saved_nets/moving_dot.mod")
-
-    def test_xor_env(self):
-        state = self.setup_state()
-        state.load_model("saved_nets/moving_dot.mod")
-
+    def run_tests(self, state):
         # run 100 tests and tally the results
         num_tests = 100
         total = 0
@@ -69,6 +59,36 @@ class TestMovingDot(unittest.TestCase):
         average_reward = total / num_tests
 
         logger.info("Average reward: %s" % average_reward)
+
+    def test_train_moving_dot(self):
+        state = self.setup_state()
+
+        state.train_for_episodes(200)
+
+        state.save_model("saved_nets/aida.mod")
+
+    def test_multiple_train_moving_dot(self):
+        state = self.setup_state()
+
+        state.load_model("saved_nets/aida.mod")
+        for i in range(20):
+            logger.info("Iteration %s" % i)
+            state.train_for_episodes(200)
+            self.run_tests(state)
+            state.save_model("saved_nets/aida.mod")
+
+    def test_continue_train_moving_dot(self):
+        state = self.setup_state()
+
+        state.load_model("saved_nets/aida.mod")
+        state.train_for_episodes(200)
+        state.save_model("saved_nets/aida.mod")
+
+    def test_moving_dot(self):
+        state = self.setup_state()
+        state.load_model("saved_nets/aida.mod")
+
+        self.run_tests(state)
 
 
 if __name__ == '__main__':
