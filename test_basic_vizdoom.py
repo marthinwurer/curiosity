@@ -3,7 +3,6 @@ import random
 import time
 
 import gym
-# noinspection PyUnresolvedReferences
 import gym_moving_dot
 import numpy as np
 import torch
@@ -12,6 +11,7 @@ import unittest
 from tqdm import tqdm
 
 from DQN import DQNTrainingState, DQNHyperparameters
+from basic_vizdoom_env import GymBasicDoomEnv
 from my_DQN import MaitlandDQN
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,17 @@ def setUpModule():
     batch_size = 128
 
 
-class TestMovingDot(unittest.TestCase):
+SAVE_NAME = "saved_nets/basic_doom.mod"
+
+
+class TestBasicViZDoom(unittest.TestCase):
+
+    def build_env(self):
+        env = GymBasicDoomEnv(10)
+        env.render("human")
+        env.reset()
+
+        return env
 
     def setup_state(self):
         seed = int(time.time())
@@ -36,10 +46,7 @@ class TestMovingDot(unittest.TestCase):
         torch.random.manual_seed(seed)
         np.random.seed(seed)
         hyper = DQNHyperparameters(batch_size=batch_size)
-        env = gym.make("MovingDot-v0")
-        env.render("human")
-        env.reset()
-        env.max_steps = 200
+        env = self.build_env()
         logger.info("Action shape: %s" % (env.action_space.shape,))
         logger.info("Observation Shape: %s" % (env.observation_space.shape,))
         actions = [env.action_space.sample() for _ in range(10)]
@@ -61,33 +68,33 @@ class TestMovingDot(unittest.TestCase):
 
         logger.info("Average reward: %s" % average_reward)
 
-    def test_train_moving_dot(self):
+    def test_train(self):
         state = self.setup_state()
 
         state.train_for_episodes(200)
 
-        state.save_model("saved_nets/aida.mod")
+        state.save_model(SAVE_NAME)
 
-    def test_multiple_train_moving_dot(self):
+    def test_multiple_train(self):
         state = self.setup_state()
 
-        state.load_model("saved_nets/aida.mod")
+        state.load_model(SAVE_NAME)
         for i in range(20):
             logger.info("Iteration %s" % i)
             state.train_for_episodes(200)
             self.run_tests(state)
-            state.save_model("saved_nets/aida.mod")
+            state.save_model(SAVE_NAME)
 
-    def test_continue_train_moving_dot(self):
+    def test_continue_train(self):
         state = self.setup_state()
 
-        state.load_model("saved_nets/aida.mod")
+        state.load_model(SAVE_NAME)
         state.train_for_episodes(200)
-        state.save_model("saved_nets/aida.mod")
+        state.save_model(SAVE_NAME)
 
-    def test_moving_dot(self):
+    def test_run(self):
         state = self.setup_state()
-        state.load_model("saved_nets/aida.mod")
+        state.load_model(SAVE_NAME)
 
         self.run_tests(state)
 

@@ -5,6 +5,7 @@ from gym import Env, Space, spaces
 from vizdoom import *
 
 from myenv import MyEnv
+from utilites import to_torch_channels
 
 
 class BasicDoomEnv(MyEnv):
@@ -138,7 +139,7 @@ class GymBasicDoomEnv(Env):
 
     def get_screen(self):
         img = self.state.screen_buffer
-        img = np.moveaxis(img, -1, 0)
+        img = to_torch_channels(img)
         return img
 
     def step(self, action: int):

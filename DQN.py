@@ -1,13 +1,11 @@
 import logging
 import math
 import random
-import time
 from itertools import count
 from typing import Type
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from collections import namedtuple
 
 from gym import Env, Space, spaces
@@ -15,8 +13,7 @@ from torch import nn
 from torch import optim
 from tqdm import tqdm
 
-from basic_vizdoom_env import MyEnv
-from utilites import format_screen, log_tensors, image_batch_to_device_and_format, to_batch_shape, to_torch_channels
+from utilites import *
 
 logger = logging.getLogger(__name__)
 
