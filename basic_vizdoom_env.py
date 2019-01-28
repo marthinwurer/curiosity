@@ -114,15 +114,15 @@ class BasicDoomObservationSpace(Space):
         return x.shape == self.shape and x.dtype == self.dtype
 
 
-class GymBasicDoomEnv(Env):
+class GymDoomEnv(Env):
 
     # Set these in ALL subclasses
     action_space = None
     observation_space = None
 
-    def __init__(self, frame_skips):
+    def __init__(self, config_path, frame_skips):
         self.game = DoomGame()
-        self.game.load_config("../ViZDoom/scenarios/basic.cfg")
+        self.game.load_config(config_path)
         self.game.init()
         self.frame_skips = frame_skips
 
@@ -168,3 +168,12 @@ class GymBasicDoomEnv(Env):
             screen = self.get_screen()
             return screen
 
+
+class GymBasicDoomEnv(GymDoomEnv):
+
+    # Set these in ALL subclasses
+    action_space = None
+    observation_space = None
+
+    def __init__(self, frame_skips):
+        super().__init__("../ViZDoom/scenarios/basic.cfg", frame_skips)
