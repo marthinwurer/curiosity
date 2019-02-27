@@ -9,6 +9,7 @@ Image dataset:
 images have integer ids and paths
 """
 
+
 class Item(object):
     def __init__(self, path, _id=None):
         self._id = _id
@@ -41,7 +42,7 @@ def build_image_table(conn: Connection):
     cursor.execute("""
         CREATE TABLE items (
             id integer primary key autoincrement ,
-            path text not null )""")
+            path text not null unique)""")
 
     conn.commit()
 
