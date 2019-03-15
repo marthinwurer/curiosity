@@ -75,8 +75,8 @@ env = gym.make('CartPole-v0').unwrapped
 
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()
-if is_ipython:
-    from IPython import display
+# if is_ipython:
+#     from IPython import display
 
 plt.ion()
 
@@ -349,9 +349,9 @@ def plot_durations():
         plt.plot(means.numpy())
 
     plt.pause(0.001)  # pause a bit so that plots are updated
-    if is_ipython:
-        display.clear_output(wait=True)
-        display.display(plt.gcf())
+    # if is_ipython:
+    #     display.clear_output(wait=True)
+    #     display.display(plt.gcf())
 
 
 ######################################################################
