@@ -30,16 +30,16 @@ def calc_params(model):
     return num_params
 
 
-def conv2d_factory(input_shape, out_channels=None, kernel_size=3, stride=1, padding=0,
+def conv2d_factory(input_shape, out_channels=None, kernel_size=3, stride=1, padding=1,
                    dilation=1, groups=1, bias=True, filter_multiplier=1):
     """
     Factory to create a convolutional layer from an input shape and return statistics about the layer
     Args:
         input_shape: the 3-d input shape (channels, height, width)
-        out_channels: The number of output channels. if left out, multiply by filter_multipler to determine the next output channels
+        out_channels: The number of output channels. if left out, multiply by filter_multiplier to determine the next output channels
         kernel_size (int or tuple) – Size of the convolving kernel
         stride (int or tuple, optional) – Stride of the convolution. Default: 1
-        padding (int or tuple, optional) – Zero-padding added to both sides of the input. Default: 0
+        padding (int or tuple, optional) – Zero-padding added to both sides of the input. Default: 1 for same
         dilation (int or tuple, optional) – Spacing between kernel elements. Default: 1
         groups (int, optional) – Number of blocked connections from input channels to output channels. Default: 1
         bias (bool, optional) – If True, adds a learnable bias to the output. Default: True
