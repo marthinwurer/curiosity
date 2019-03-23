@@ -6,7 +6,7 @@ from torch import nn, Tensor
 
 from DQN import DQNNet, DQNHyperparameters, DQNTrainingState
 from basic_vizdoom_env import BasicDoomEnv
-from utilites import GenericConvolutionalEncoder, flat_shape, flatten, GenericFullyConnected
+from utilities import GenericConvolutionalEncoder, flat_shape, flatten, GenericFullyConnected
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ from torch import nn
 from torch import optim
 from tqdm import tqdm
 
-from utilites import *
+from utilities import *
 
 logger = logging.getLogger(__name__)
 

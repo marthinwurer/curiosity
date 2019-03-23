@@ -17,7 +17,7 @@ import warnings
 from torchvision.transforms import ToTensor, transforms
 from tqdm import tqdm
 
-from utilites import conv2d_factory, unflatten, flat_shape, flatten
+from utilities import conv2d_factory, unflatten, flat_shape, flatten
 
 warnings.filterwarnings("ignore")
 
@@ -49,8 +49,8 @@ class VGImagesDataset(Dataset):
 
     def __getitem__(self, idx):
         filename = self.images[idx]
-        print(filename)
-        image = Image.open(filename)
+        # print(filename)
+        image = Image.open(filename).convert("RGB")
 
         sample = self.transform(image)
 
@@ -234,19 +234,14 @@ class ProGANDecoder(nn.Module):
         return x
 
 
-def train_autoencoder(net, optimizer, device, trainset, batch_size, epochs, callback=None):
+def train_autoencoder(net, optimizer, device, trainset, trainloader, batch_size, epochs, callback=None):
     train_batches = math.ceil(len(trainset) / batch_size)
     running_loss = 0.0
-    trainloader = torch.utils.data.DataLoader(
-        trainset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=2
-    )
 
     for epoch in range(epochs):  # loop over the dataset multiple times
 
-        loss_steps = 8000 / batch_size
+        # loss_steps = 8000 / batch_size
+        loss_steps = 5
 
         with tqdm(enumerate(trainloader, 0), total=train_batches, unit="batch") as t:
             for i, data in t:
@@ -266,7 +261,7 @@ def train_autoencoder(net, optimizer, device, trainset, batch_size, epochs, call
                 # print statistics
                 running_loss += loss.item()
                 if i % loss_steps == loss_steps - 1:  # print every 2000 mini-batches
-                    string = '[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / loss_steps)
+                    string = '[%d, %5d] loss: %.8f' % (epoch + 1, i + 1, running_loss / loss_steps)
                     t.set_postfix_str(string)
                     running_loss = 0.0
             if callback:
@@ -309,8 +304,8 @@ def main():
     dataset = VGImagesDataset(root_dir=VG_PATH, transform=net_transform)
 
     # BATCH_SIZE = 128
-    BATCH_SIZE = 4
-    LEARNING_RATE = 0.01
+    BATCH_SIZE = 32
+    LEARNING_RATE = 0.0001
     EPOCHS = 1
     MOMENTUM = 0.9
 
@@ -323,7 +318,14 @@ def main():
 
     optimizer = optim.RMSprop(net.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
 
-    train_autoencoder(net, optimizer, device, dataset, BATCH_SIZE, EPOCHS)
+    trainloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=4
+    )
+
+    train_autoencoder(net, optimizer, device, dataset, trainloader, BATCH_SIZE, EPOCHS)
 
     path = "saved_nets/autoencoder.mod"
     print("Saving Model to %s" % path)

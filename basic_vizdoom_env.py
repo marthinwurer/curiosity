@@ -5,7 +5,7 @@ from gym import Env, Space, spaces
 from vizdoom import *
 
 from myenv import MyEnv
-from utilites import to_torch_channels
+from utilities import to_torch_channels
 
 
 class BasicDoomEnv(MyEnv):

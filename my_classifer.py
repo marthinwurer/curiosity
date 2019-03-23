@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from trainer import test, train
-from utilites import conv_output_shape, calc_params, flat_shape, GenericConvolutionalEncoder, flatten
+from utilities import conv_output_shape, calc_params, flat_shape, GenericConvolutionalEncoder, flatten
 
 
 class MyClassifierNet(nn.Module):
