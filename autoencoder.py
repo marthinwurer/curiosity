@@ -4,9 +4,10 @@ import random
 
 import matplotlib.pyplot as plt
 import numpy
+import torch
 from PIL import Image
-from torch import nn
-from torch.utils.data import Dataset
+from torch import nn, optim
+from torch.utils.data import Dataset, random_split
 import torch.nn.functional as F
 
 
@@ -14,8 +15,9 @@ import torch.nn.functional as F
 import warnings
 
 from torchvision.transforms import ToTensor, transforms
+from tqdm import tqdm
 
-from utilites import conv2d_factory, unflatten
+from utilites import conv2d_factory, unflatten, flat_shape, flatten
 
 warnings.filterwarnings("ignore")
 
@@ -52,71 +54,32 @@ class VGImagesDataset(Dataset):
 
         sample = self.transform(image)
 
-        return sample
-
-
-class Encoder256(nn.Module):
-    def __init__(self, input_shape, max_final_width=8, activation=F.relu):
-        """
-
-        Args:
-            input_shape: a 3-element tuple with the number of channels, the height, and the width. (channels first)
-            max_final_width: the maximum desired final width of the network.
-            activation: The activation function used by each layer
-        """
-        super().__init__()
-
-        # from rgb to ours 3 -> 8 -> 16 -> 32 -> 64 -> 128 -> 256 -> 512
-        #                       256  128   64    32    16     8      4
-
-        next_shape = input_shape
-        self.from_rgb, next_shape, layer_params = conv2d_factory(next_shape, kernel_size=1,
-                                                            padding=1, out_channels=8)
-        self.conv11, next_shape, layer_params = conv2d_factory(next_shape, padding=1)
-
-        self.conv21, next_shape, layer_params = conv2d_factory(next_shape / 2, out_channels=16, padding=1)
-        self.conv31, next_shape, layer_params = conv2d_factory(next_shape / 2, out_channels=32, padding=1)
-        self.conv41, next_shape, layer_params = conv2d_factory(next_shape / 2, out_channels=64, padding=1)
-        self.conv51, next_shape, layer_params = conv2d_factory(next_shape / 2, out_channels=128, padding=1)
-        self.conv61, next_shape, layer_params = conv2d_factory(next_shape / 2, out_channels=256, padding=1)
-        self.conv71, next_shape, layer_params = conv2d_factory(next_shape / 2, out_channels=512, padding=1)
-
-        self.activation = activation
-        self.output_shape = next_shape
-
-
-    def forward(self, x):
-
-        for layer in self.conv_layers:
-            x = self.activation(layer(x))
-        return x
-
-
-class LayerFactory(object):
-    def __init__(self, clazz, compute_next=None, other_args=None):
-        self.clazz = clazz
-        self.compute_next = compute_next
-        self.other_args = other_args
-
-    def output_shape(self, input_shape):
-        if self.compute_next:
-            return self.compute_next(input_shape)
-        else:
-            return self.clazz.output_shape(input_shape)
+        return (sample, 0)  # return tuple for reasons
 
 
 class ProGANAutoencoder(nn.Module):
     def __init__(self, latent_size, input_power, output_power, start_filters=16, max_filters=512, activation=nn.ReLU):
         super().__init__()
+        self.latent_size = latent_size
+
         self.encoder = ProGANEncoder(input_power, output_power, start_filters, max_filters, activation)
 
-        self.latent_size = latent_size
+        self.fc_enc = nn.Linear(flat_shape(self.encoder.output_shape), latent_size)
 
         self.decoder = ProGANDecoder(latent_size, output_power, input_power, start_filters, max_filters, activation)
 
     def forward(self, input):
-        pass
+        x = self.encoder(input)
+        x = flatten(x)
+        latent = self.fc_enc(x)
+        output = self.decoder(latent)
 
+        return output, latent
+
+    def loss(self, input, output, latent):
+        reconstruction = F.mse_loss(input, output)
+
+        return reconstruction
 
 
 class ProGANEncoder(nn.Module):
@@ -147,6 +110,8 @@ class ProGANEncoder(nn.Module):
             activation: The activation function used by each layer
         """
         super().__init__()
+
+        assert input_power > output_power
 
         layers = nn.ModuleList([])
 
@@ -211,11 +176,11 @@ class ProGANDecoder(nn.Module):
         """
         super().__init__()
 
-        # layers = nn.ModuleList([])
+        assert output_power > input_power
 
         reverse_layers = []
 
-        num_layers = input_power - output_power
+        num_layers = output_power - input_power
         in_channels = end_filters
         out_channels = in_channels
 
@@ -242,7 +207,7 @@ class ProGANDecoder(nn.Module):
                 activation()
             ))
 
-        ordered_layers = reverse_layers.reverse()
+        ordered_layers = reversed(reverse_layers)
 
         unflatten = nn.ConvTranspose2d(latent_size, out_channels, kernel_size=2**input_power)
 
@@ -269,15 +234,53 @@ class ProGANDecoder(nn.Module):
         return x
 
 
-def main():
-    # plt.ion()  # interactive mode
+def train_autoencoder(net, optimizer, device, trainset, batch_size, epochs, callback=None):
+    train_batches = math.ceil(len(trainset) / batch_size)
+    running_loss = 0.0
+    trainloader = torch.utils.data.DataLoader(
+        trainset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=2
+    )
 
-    transform = transforms.Compose([
+    for epoch in range(epochs):  # loop over the dataset multiple times
+
+        loss_steps = 8000 / batch_size
+
+        with tqdm(enumerate(trainloader, 0), total=train_batches, unit="batch") as t:
+            for i, data in t:
+                # get the inputs
+                inputs, labels = data
+                inputs = inputs.to(device)
+
+                # zero the parameter gradients
+                optimizer.zero_grad()
+
+                # forward + backward + optimize
+                outputs, latents = net(inputs)
+                loss = net.loss(inputs, outputs, latents)
+                loss.backward()
+                optimizer.step()
+
+                # print statistics
+                running_loss += loss.item()
+                if i % loss_steps == loss_steps - 1:  # print every 2000 mini-batches
+                    string = '[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / loss_steps)
+                    t.set_postfix_str(string)
+                    running_loss = 0.0
+            if callback:
+                callback()
+
+
+def view_dataset():
+
+    view_transform = transforms.Compose([
         transforms.Resize(256),
-        transforms.RandomCrop(256, pad_if_needed=True)
+        transforms.RandomCrop(256, pad_if_needed=True),
     ])
 
-    face_dataset = VGImagesDataset(root_dir=VG_PATH, transform=transform)
+    face_dataset = VGImagesDataset(root_dir=VG_PATH, transform=view_transform)
 
     fig = plt.figure()
 
@@ -286,8 +289,46 @@ def main():
 
     image = face_dataset[index]
 
+    print(image.size())
+
     plt.imshow(image)
     plt.show()
+
+
+def main():
+    # plt.ion()  # interactive mode
+
+
+    net_transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.RandomCrop(256, pad_if_needed=True),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+
+    dataset = VGImagesDataset(root_dir=VG_PATH, transform=net_transform)
+
+    # BATCH_SIZE = 128
+    BATCH_SIZE = 4
+    LEARNING_RATE = 0.01
+    EPOCHS = 1
+    MOMENTUM = 0.9
+
+    net = ProGANAutoencoder(512, 8, 2)
+    print(net)
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(device)
+    net.to(device)
+
+    optimizer = optim.RMSprop(net.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
+
+    train_autoencoder(net, optimizer, device, dataset, BATCH_SIZE, EPOCHS)
+
+    path = "saved_nets/autoencoder.mod"
+    print("Saving Model to %s" % path)
+    torch.save(net.state_dict(), path)
+
 
 
 
