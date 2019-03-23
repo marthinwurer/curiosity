@@ -123,6 +123,9 @@ def flat_shape(shape):
 def flatten(mod: nn.Module):
     return mod.view(mod.size(0), -1)
 
+def unflatten(mod: nn.Module):
+    return mod.view(mod.size(0), mod.size(1), 1, 1)
+
 
 class Flatten(nn.Module):
     def forward(self, x):
