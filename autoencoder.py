@@ -124,18 +124,10 @@ class ProGANEncoder(nn.Module):
         layers.append(activation())
 
         for i in range(num_layers):
-            starter = nn.Conv2d(in_channels, out_channels, 3, 1, padding=1)  # need padding to not shrink size
             out_channels = min(in_channels * 2, max_filters)
-            grow = nn.Conv2d(in_channels, out_channels, 3, 1, padding=1)
+            layer = ProGANEncoderLayer(2, in_channels, out_channels, activation)
             in_channels = out_channels
-            pool = nn.AvgPool2d(2, 2)
-            layers.append(nn.Sequential(
-                starter,
-                activation(),
-                grow,
-                activation(),
-                pool
-            ))
+            layers.append(layer)
 
         final = nn.Conv2d(in_channels, out_channels, 3, 1, padding=1)
         layers.append(final)
@@ -149,8 +141,31 @@ class ProGANEncoder(nn.Module):
         return x
 
 
-class ProGANConv(nn.Module):
-    pass
+class ProGANEncoderLayer(nn.Module):
+    def __init__(self, num_layers: int, in_channels, out_channels, activation):
+        super().__init__()
+        num_starter = num_layers - 1
+        if num_starter < 0:
+            raise ValueError("Must have at least one layer")
+        starter_layers = nn.ModuleList([])
+        for i in range(num_starter):
+            starter = nn.Conv2d(in_channels, in_channels, 3, 1, padding=1)  # need padding to not shrink size
+            starter_layers.append(starter)
+            starter_layers.append(activation())
+        grow = nn.Conv2d(in_channels, out_channels, 3, 1, padding=1)
+        pool = nn.AvgPool2d(2, 2)
+        self.starters = starter_layers
+        self.layer = nn.Sequential(
+            grow,
+            activation(),
+            pool
+        )
+
+    def forward(self, x):
+        for layer in self.starters:
+            x = layer(x)
+        x = self.layer(x)
+        return x
 
 
 class ProGANDecoder(nn.Module):
@@ -187,25 +202,10 @@ class ProGANDecoder(nn.Module):
         to_rgb = nn.Conv2d(out_channels, 3, 1, 1)
 
         for i in range(num_layers):
-
-            same = nn.Conv2d(out_channels, out_channels, 3, 1, padding=1)
-
             in_channels = min(out_channels * 2, max_filters)
-
-            half = nn.Conv2d(in_channels, out_channels, 3, 1, padding=1)  # need padding to not shrink size
-
-            upsample = nn.Upsample(scale_factor=2, mode='nearest')
-
+            layer = ProGANDecoderLayer(2, in_channels, out_channels, activation)
             out_channels = in_channels
-
-            # add those in reverse order
-            reverse_layers.append(nn.Sequential(
-                upsample,
-                half,
-                activation(),
-                same,
-                activation()
-            ))
+            reverse_layers.append(layer)
 
         ordered_layers = reversed(reverse_layers)
 
@@ -230,6 +230,37 @@ class ProGANDecoder(nn.Module):
         # need to unflatten the input
         x = unflatten(x)
         for layer in self.layers:
+            x = layer(x)
+        return x
+
+
+class ProGANDecoderLayer(nn.Module):
+    def __init__(self, num_layers: int, in_channels, out_channels, activation):
+        super().__init__()
+        num_same = num_layers - 1
+        if num_same < 0:
+            raise ValueError("Must have at least one layer")
+
+        upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        shrink = nn.Conv2d(in_channels, out_channels, 3, 1, padding=1)
+
+        self.layer = nn.Sequential(
+            upsample,
+            shrink,
+            activation(),
+        )
+
+        same_layers = nn.ModuleList([])
+        for i in range(num_same):
+            starter = nn.Conv2d(out_channels, out_channels, 3, 1, padding=1)  # need padding to not shrink size
+            same_layers.append(starter)
+            same_layers.append(activation())
+
+        self.same = same_layers
+
+    def forward(self, x):
+        x = self.layer(x)
+        for layer in self.same:
             x = layer(x)
         return x
 
@@ -293,23 +324,28 @@ def view_dataset():
 def main():
     # plt.ion()  # interactive mode
 
+    # BATCH_SIZE = 128
+    # BATCH_SIZE = 32
+    BATCH_SIZE = 8
+    LEARNING_RATE = 0.0001
+    EPOCHS = 1
+    MOMENTUM = 0.9
+    IN_POWER = 3
+
+    in_dim = 2 ** IN_POWER
+
+
 
     net_transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomCrop(256, pad_if_needed=True),
+        transforms.Resize(in_dim),
+        transforms.RandomCrop(in_dim, pad_if_needed=True),
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
 
     dataset = VGImagesDataset(root_dir=VG_PATH, transform=net_transform)
 
-    # BATCH_SIZE = 128
-    BATCH_SIZE = 32
-    LEARNING_RATE = 0.0001
-    EPOCHS = 1
-    MOMENTUM = 0.9
-
-    net = ProGANAutoencoder(512, 8, 2)
+    net = ProGANAutoencoder(512, IN_POWER, 2)
     print(net)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
