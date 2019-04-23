@@ -1,5 +1,6 @@
 import glob
 import math
+import os
 import random
 
 import matplotlib.pyplot as plt
@@ -17,6 +18,7 @@ import warnings
 from torchvision.transforms import ToTensor, transforms
 from tqdm import tqdm
 
+from training_state import TrainingState, Hyperparameters
 from utilities import conv2d_factory, unflatten, flat_shape, flatten
 
 warnings.filterwarnings("ignore")
@@ -260,12 +262,22 @@ def train_autoencoder(net, optimizer, device, trainset, trainloader, batch_size,
 
                 # print statistics
                 running_loss += loss.item()
-                if i % loss_steps == loss_steps - 1:  # print every 2000 mini-batches
+                if i % loss_steps == loss_steps - 1:  # print every N mini-batches
                     string = '[%d, %5d] loss: %.8f' % (epoch + 1, i + 1, running_loss / loss_steps)
                     t.set_postfix_str(string)
                     running_loss = 0.0
             if callback:
                 callback()
+
+
+def train_ae_with_state(training_state: TrainingState, device, trainset, trainloader, epochs):
+    for i in range(epochs):
+        train_autoencoder(training_state.model, training_state.optimizer, device, trainset, trainloader, training_state.hyper.batch_size, 1, callback=None)
+        training_state.training_steps += 1
+
+        # save checkpoint
+        filename = "saved_nets/autoencoder_cp_%s.tar" % training_state.training_steps
+        training_state.save_state(filename)
 
 
 def view_dataset():
@@ -290,15 +302,23 @@ def view_dataset():
     plt.show()
 
 
+
+
 def main():
     # plt.ion()  # interactive mode
 
+    cont = True
+
+    filename = "saved_nets/autoencoder_state.tar"
+
+    if os.path.exists(filename) and not cont:
+        raise FileExistsError(filename)
 
     net_transform = transforms.Compose([
         transforms.Resize(256),
         transforms.RandomCrop(256, pad_if_needed=True),
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
 
     dataset = VGImagesDataset(root_dir=VG_PATH, transform=net_transform)
@@ -306,8 +326,10 @@ def main():
     # BATCH_SIZE = 128
     BATCH_SIZE = 32
     LEARNING_RATE = 0.0001
-    EPOCHS = 1
+    EPOCHS = 50
     MOMENTUM = 0.9
+
+    hyper = Hyperparameters(BATCH_SIZE, LEARNING_RATE)
 
     net = ProGANAutoencoder(512, 8, 2)
     print(net)
@@ -325,7 +347,14 @@ def main():
         num_workers=4
     )
 
-    train_autoencoder(net, optimizer, device, dataset, trainloader, BATCH_SIZE, EPOCHS)
+    train_state = TrainingState(net, optimizer, hyper)
+
+    if cont:
+        train_state.load_state(filename)
+
+    train_ae_with_state(train_state, device, dataset, trainloader, EPOCHS)
+
+    train_state.save_state(filename)
 
     path = "saved_nets/autoencoder.mod"
     print("Saving Model to %s" % path)
