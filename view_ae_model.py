@@ -13,20 +13,28 @@ from training_state import Hyperparameters, TrainingState
 # noinspection PyPep8Naming
 def main():
 
-    net_transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.RandomCrop(256, pad_if_needed=True),
-        transforms.ToTensor(),
-    ])
+    filename = "saved_nets/autoencoder_cp_10.tar"
 
-    dataset = VGImagesDataset(root_dir=VG_PATH, transform=net_transform)
-    BATCH_SIZE = 32
+    BATCH_SIZE = 8
     LEARNING_RATE = 0.0001
+    EPOCHS = 1
     MOMENTUM = 0.9
+    IN_POWER = 8
+
+    in_dim = 2 ** IN_POWER
 
     hyper = Hyperparameters(BATCH_SIZE, LEARNING_RATE)
 
-    net = ProGANAutoencoder(512, 8, 2)
+    net_transform = transforms.Compose([
+        transforms.Resize(in_dim),
+        transforms.RandomCrop(in_dim, pad_if_needed=True),
+        transforms.ToTensor(),
+        # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+
+    dataset = VGImagesDataset(root_dir=VG_PATH, transform=net_transform)
+
+    net = ProGANAutoencoder(512, IN_POWER, 2)
     print(net)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -37,7 +45,7 @@ def main():
 
 
     train_state = TrainingState(net, optimizer, hyper)
-    train_state.load_state("saved_nets/autoencoder_state.tar")
+    train_state.load_state(filename)
 
     view_samples(train_state.model, dataset, device)
     # view_samples(None, dataset)

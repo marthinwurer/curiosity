@@ -60,7 +60,8 @@ class VGImagesDataset(Dataset):
 
 
 class ProGANAutoencoder(nn.Module):
-    def __init__(self, latent_size, input_power, output_power, start_filters=16, max_filters=512, activation=nn.ReLU):
+    def __init__(self, latent_size, input_power, output_power,
+                 start_filters=16, max_filters=512, activation=nn.LeakyReLU):
         super().__init__()
         self.latent_size = latent_size
 
@@ -103,7 +104,7 @@ class ProGANEncoder(nn.Module):
     end are really simple. I just go until the next size will be our 4x4
 
     """
-    def __init__(self, input_power, output_power, start_filters=16, max_filters=512, activation=nn.ReLU):
+    def __init__(self, input_power, output_power, start_filters=16, max_filters=512, activation=nn.LeakyReLU):
         """
 
         Args:
@@ -183,7 +184,7 @@ class ProGANDecoder(nn.Module):
     }
     to_rgb 1x1 -> 3
     """
-    def __init__(self, latent_size, input_power, output_power, end_filters=16, max_filters=512, activation=nn.ReLU):
+    def __init__(self, latent_size, input_power, output_power, end_filters=16, max_filters=512, activation=nn.LeakyReLU):
         """
 
         Args:
@@ -340,17 +341,18 @@ def main():
 
     cont = True
 
-    filename = "saved_nets/autoencoder_state.tar"
+    filename = "saved_nets/autoencoder/autoencoder_state.tar"
 
     if os.path.exists(filename) and not cont:
         raise FileExistsError(filename)
+
     # BATCH_SIZE = 128
-    # BATCH_SIZE = 32
-    BATCH_SIZE = 8
-    LEARNING_RATE = 0.0001
-    EPOCHS = 1
+    BATCH_SIZE = 32
+    # BATCH_SIZE = 8
+    LEARNING_RATE = 0.00001
+    EPOCHS = 30
     MOMENTUM = 0.9
-    IN_POWER = 3
+    IN_POWER = 8
 
     in_dim = 2 ** IN_POWER
 
@@ -385,6 +387,10 @@ def main():
 
     if cont:
         train_state.load_state(filename)
+    else:
+        # test saving
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        train_state.save_state(filename)
 
     train_ae_with_state(train_state, device, dataset, trainloader, EPOCHS)
 
