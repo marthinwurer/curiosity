@@ -1,6 +1,12 @@
-#Installation stuff:
+# Installation stuff:
 
-##ViZDoom:
+## ViZDoom:
+
+Clone the ViZDoom repo
+
+```bash
+git clone git@github.com:mwydmuch/ViZDoom.git
+```
 
 custom install from repo, install dependencies from ZDoom:
 
@@ -12,6 +18,8 @@ Then install the ones from https://github.com/mwydmuch/ViZDoom/blob/master/doc/B
 Vizdoom cmake flags:
 
 https://stackoverflow.com/a/38121972/3000741
+
+Change to desired pyenv env, then run cmake and make.
 
 ```bash
 cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON3=ON \
