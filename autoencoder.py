@@ -60,16 +60,26 @@ class VGImagesDataset(Dataset):
 
 
 class ProGANAutoencoder(nn.Module):
-    def __init__(self, latent_size, input_power, output_power,
+    def __init__(self, latent_size, input_power, inner_power,
                  start_filters=16, max_filters=512, activation=nn.LeakyReLU):
+        """
+
+        Args:
+            latent_size:
+            input_power:
+            inner_power: The power of 2 of the middle side length.
+            start_filters:
+            max_filters:
+            activation:
+        """
         super().__init__()
         self.latent_size = latent_size
 
-        self.encoder = ProGANEncoder(input_power, output_power, start_filters, max_filters, activation)
+        self.encoder = ProGANEncoder(input_power, inner_power, start_filters, max_filters, activation)
 
         self.fc_enc = nn.Linear(flat_shape(self.encoder.output_shape), latent_size)
 
-        self.decoder = ProGANDecoder(latent_size, output_power, input_power, start_filters, max_filters, activation)
+        self.decoder = ProGANDecoder(latent_size, inner_power, input_power, start_filters, max_filters, activation)
 
     def forward(self, input):
         x = self.encoder(input)
