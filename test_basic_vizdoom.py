@@ -1,6 +1,7 @@
 import logging
 import random
 import time
+import warnings
 
 import gym
 import gym_moving_dot
@@ -17,6 +18,7 @@ from my_DQN import MaitlandDQN
 logger = logging.getLogger(__name__)
 device = torch.device("cpu")
 
+warnings.filterwarnings("ignore")
 
 def setUpModule():
     FORMAT = '%(asctime)-15s | %(filename)s:%(lineno)s | %(message)s'
