@@ -1,9 +1,11 @@
 from functools import reduce
+from typing import Union
 
 import torch
 from math import floor
-from torch import nn
+from torch import nn, Tensor
 
+import matplotlib.pyplot as plt
 import numpy as np
 import operator as op
 import torch.nn.functional as F
@@ -124,7 +126,7 @@ def flatten(mod: nn.Module):
     return mod.view(mod.size(0), -1)
 
 
-def unflatten(mod: nn.Module):
+def unflatten(mod: Union[nn.Module]):
     return mod.view(mod.size(0), mod.size(1), 1, 1)
 
 
@@ -219,4 +221,39 @@ def log_tensors(logger):
     logger.debug(len(tensor_data_list))
     logger.debug(tensor_count_by_size)
     logger.debug("Total Size: %s" % total_size)
+
+
+def nan_canary(tensor):
+    if torch.isnan(tensor).any():
+        print(tensor, flush=True)
+        raise Exception("Found NaN!")
+
+
+def unnormalize(image, mean, std):
+    """
+    Reverses the normalization that is done to an image.
+    """
+    image = ((image * std) + mean)
+    return image
+
+
+def to_t_shape(data, shape):
+    # noinspection PyArgumentList
+    return Tensor(data).view(*shape)
+
+
+def view(tensor, mean=(0.5, 0.5, 0.5), stddev=(0.5, 0.5, 0.5)):
+    tmean = to_t_shape(mean, (-1, 1, 1))
+    tstd = to_t_shape(stddev, (-1, 1, 1))
+    tensor = tensor.detach().cpu()
+    tensor = unnormalize(tensor, tmean, tstd).permute(1, 2, 0)
+    tensor = tensor.numpy()
+    return plt.imshow(tensor)
+
+
+def image_to_batch(image):
+    image = image.transpose(-1, 0)
+    return image.view(1, *image.shape)
+
+
 
