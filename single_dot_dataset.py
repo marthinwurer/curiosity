@@ -93,6 +93,7 @@ class CoordConvTranspose2d(conv.ConvTranspose2d):
         :return: CoordConv2d Result
         """
         out = self.addcoords(input)
+        nan_canary(out)
         out = self.conv(out)
 
         return out
@@ -134,10 +135,10 @@ class WMDecoder(nn.Module):
     def __init__(self):
         super().__init__()
 #         self.deconv1 = CoordConvTranspose2d(1024, 128, 5, stride=2)
-        self.deconv1 = nn.ConvTranspose2d(1024, 128, 5, stride=2)
-        self.deconv2 = nn.ConvTranspose2d(128, 64, 5, stride=2)
-        self.deconv3 = nn.ConvTranspose2d(64, 32, 6, stride=2)
-        self.deconv4 = nn.ConvTranspose2d(32, 16, 6, stride=2)
+        self.deconv1 = CoordConvTranspose2d(1024, 128, 5, stride=2)
+        self.deconv2 = CoordConvTranspose2d(128, 64, 5, stride=2)
+        self.deconv3 = CoordConvTranspose2d(64, 32, 6, stride=2)
+        self.deconv4 = CoordConvTranspose2d(32, 16, 6, stride=2)
         self.to_rgb = CoordConv2d(16, 3, 1, stride=1)
 
 
@@ -147,7 +148,9 @@ class WMDecoder(nn.Module):
         x = F.layer_norm(x, x.size()[1:])
 #         print(x.shape)
         nan_canary(x)
-        x = F.relu(self.deconv1(x))
+        x = self.deconv1(x)
+        nan_canary(x)
+        x = F.relu(x)
 #         print(x.shape)
         nan_canary(x)
         x = F.relu(self.deconv2(F.layer_norm(x, x.size()[1:])))
@@ -160,7 +163,6 @@ class WMDecoder(nn.Module):
         x = F.relu(self.deconv4(x))  # activation and norm removed so it's a fully linear layer
         x = self.to_rgb(x)
         return x
-
 
 class WMLatent(nn.Module):
     def __init__(self):
