@@ -135,7 +135,7 @@ class WMDecoder(nn.Module):
     def __init__(self):
         super().__init__()
 #         self.deconv1 = CoordConvTranspose2d(1024, 128, 5, stride=2)
-        self.deconv1 = CoordConvTranspose2d(1024, 128, 5, stride=2)
+        self.deconv1 = nn.ConvTranspose2d(1024, 128, 5, stride=2)
         self.deconv2 = CoordConvTranspose2d(128, 64, 5, stride=2)
         self.deconv3 = CoordConvTranspose2d(64, 32, 6, stride=2)
         self.deconv4 = CoordConvTranspose2d(32, 16, 6, stride=2)

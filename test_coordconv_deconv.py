@@ -28,6 +28,13 @@ class TestDeconv(unittest.TestCase):
         print(output.shape)
         nan_canary(output)
 
+    def test_deconv_1x1(self):
+        data = torch.ones((4, 3, 1, 1))#.cuda()
+        mod = CoordConvTranspose2d(3, 50, 3, stride=2)#.cuda()
+        output = F.relu(mod(data))
+        print(output.shape)
+        nan_canary(output)
+
 class TestWMAE(unittest.TestCase):
     def test_forward(self):
         batch = torch.rand((32, 3, 64, 64))#.cuda()
